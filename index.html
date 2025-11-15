@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Snake & Ladder</title>
+<style>
+:root{--size:500px;--cells:10}
+body{font-family:Arial;background:#f3f3f3;display:flex;flex-direction:column;align-items:center;min-height:100vh;margin:0;padding:24px}
+#startScreen{width:360px;background:#fff;padding:18px;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.08);display:flex;flex-direction:column;align-items:center;gap:10px}
+#startScreen input{width:80%;padding:10px;font-size:15px;border:1px solid #ddd;border-radius:6px}
+#startScreen button{padding:10px 18px;font-size:16px;cursor:pointer;border-radius:6px;border:0;background:#1976d2;color:#fff}
+#wrap{width:var(--size);height:var(--size);position:relative;display:none;margin-top:18px;box-shadow:0 8px 24px rgba(0,0,0,.12);background:linear-gradient(180deg,#ffffff,#fafafa)}
+#board{position:absolute;left:0;top:0;width:100%;height:100%;display:grid;grid-template-columns:repeat(var(--cells),1fr);grid-template-rows:repeat(var(--cells),1fr);border:4px solid #222;box-sizing:border-box}
+.cell{border:1px solid #e0e0e0;display:flex;align-items:flex-start;justify-content:flex-end;padding:6px;font-size:12px;box-sizing:border-box;position:relative;background:linear-gradient(180deg,#fff,#f7f7f7)}
+.label{font-weight:700;color:#333;opacity:.9}
+svg#overlay{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none}
+.ladder-line{stroke:#8b5a2b;stroke-width:6;stroke-linecap:round;fill:none}
+.ladder-rung{stroke:#8b5a2b;stroke-width:3}
+.snake-path{stroke:#d32f2f;stroke-width:6;fill:none;stroke-linecap:round}
+.snake-head{fill:#b71c1c}
+.snake-tail{fill:#a52714}
+#panel{display:none;margin-top:14px;text-align:center}
+#rollBtn{padding:8px 18px;font-size:15px;cursor:pointer;border-radius:6px;border:0;background:#2e7d32;color:#fff;margin-top:10px}
+#diceResult{margin-top:8px;font-size:18px}
+.player{width:22px;height:22px;border-radius:50%;position:absolute;transform:translate(-50%,-50%);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;box-shadow:0 3px 8px rgba(0,0,0,.2);font-size:12px}
+.p1{background:#e53935}
+.p2{background:#1e88e5}
+.status{margin-top:8px;font-size:16px;color:#333}
+.offarea{display:flex;gap:12px;margin-top:12px;align-items:center}
+.offbox{width:70px;height:36px;background:#fff;border:1px dashed #ccc;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:13px;color:#666}
+#replayBtn{padding:8px 18px;font-size:15px;cursor:pointer;border-radius:6px;border:0;background:#d32f2f;color:#fff;margin-top:10px;display:none}
+</style>
+</head>
+<body>
+
+<div id="startScreen">
+  <h2 style="margin:0">Snake & Ladder</h2>
+  <input id="name1" placeholder="Player 1 name">
+  <input id="name2" placeholder="Player 2 name">
+  <button id="startBtn">Start Game</button>
+</div>
+
+<div id="wrap">
+  <div id="board"></div>
+  <svg id="overlay"></svg>
+</div>
+
+<div id="panel">
+  <div id="turnText" style="font-size:18px;font-weight:700"></div>
+  <button id="rollBtn">Roll Dice</button>
+  <div id="diceResult"></div>
+  <div class="status" id="status"></div>
+  <div class="offarea">
+    <div class="offbox" id="off1">Off-board</div>
+    <div class="offbox" id="off2">Off-board</div>
+  </div>
+  <button id="replayBtn">Replay Game</button>
+</div>
+
+<script>
+let name1="",name2="";
+let size=500;
+let cellSize=size/10;
+let positions=[];
+let board=document.getElementById("board");
+let overlay=document.getElementById("overlay");
+let startBtn=document.getElementById("startBtn");
+let rollBtn=document.getElementById("rollBtn");
+let replayBtn=document.getElementById("replayBtn");
+let turnText=document.getElementById("turnText");
+let diceResult=document.getElementById("diceResult");
+let status=document.getElementById("status");
+let off1box=document.getElementById("off1");
+let off2box=document.getElementById("off2");
+let snakes={99:54,90:48,67:35,52:29,25:5};
+let ladders={3:22,8:30,28:84,36:44,51:67,71:92};
+let p1=0,p2=0,turn=1,entered1=false,entered2=false;
+
+function buildBoard(){
+  board.innerHTML="";
+  let count=0;
+  for(let row=9;row>=0;row--){
+    for(let col=0;col<10;col++){
+      count++;
+      let index=row*10 + (row%2===0 ? col+1 : 10-col);
+      let d=document.createElement("div");
+      d.className="cell";
+      d.id="c"+index;
+      let lbl=document.createElement("div");
+      lbl.className="label";
+      lbl.textContent=index;
+      d.appendChild(lbl);
+      board.appendChild(d);
+      let displayRow=Math.floor((count-1)/10);
+      let displayCol=(count-1)%10;
+      let cx=displayCol*cellSize + cellSize/2;
+      let cy=displayRow*cellSize + cellSize/2;
+      positions[index]={x:cx,y:cy,el:d};
+    }
+  }
+}
+
+function drawLadder(a,b){
+  let s=positions[a],e=positions[b];
+  let x1=s.x,y1=s.y,x2=e.x,y2=e.y;
+  let g=document.createElementNS("http://www.w3.org/2000/svg","g");
+  let line=document.createElementNS("http://www.w3.org/2000/svg","line");
+  line.setAttribute("x1",x1);line.setAttribute("y1",y1);line.setAttribute("x2",x2);line.setAttribute("y2",y2);line.setAttribute("class","ladder-line");
+  g.appendChild(line);
+  let perpX=-(y2-y1),perpY=(x2-x1),len=Math.hypot(perpX,perpY)||1;
+  perpX=perpX/len*10;perpY=perpY/len*10;
+  let rail1=document.createElementNS("http://www.w3.org/2000/svg","line");
+  rail1.setAttribute("x1",x1+perpX);rail1.setAttribute("y1",y1+perpY);rail1.setAttribute("x2",x2+perpX);rail1.setAttribute("y2",y2+perpY);rail1.setAttribute("class","ladder-line");
+  let rail2=document.createElementNS("http://www.w3.org/2000/svg","line");
+  rail2.setAttribute("x1",x1-perpX);rail2.setAttribute("y1",y1-perpY);rail2.setAttribute("x2",x2-perpX);rail2.setAttribute("y2",y2-perpY);rail2.setAttribute("class","ladder-line");
+  g.appendChild(rail1);g.appendChild(rail2);
+  let steps=6;
+  for(let i=1;i<steps;i++){
+    let t=i/steps;
+    let rx=x1 + (x2-x1)*t;
+    let ry=y1 + (y2-y1)*t;
+    let rung=document.createElementNS("http://www.w3.org/2000/svg","line");
+    rung.setAttribute("x1",rx+perpX);rung.setAttribute("y1",ry+perpY);rung.setAttribute("x2",rx-perpX);rung.setAttribute("y2",ry-perpY);rung.setAttribute("class","ladder-rung");
+    g.appendChild(rung);
+  }
+  overlay.appendChild(g);
+}
+
+function drawSnake(a,b){
+  let s=positions[a],e=positions[b];
+  let x1=s.x,y1=s.y,x2=e.x,y2=e.y;
+  let dx=(x2-x1),dy=(y2-y1);
+  let cx1= x1 + dy*0.4;
+  let cy1= y1 - dx*0.4;
+  let cx2= x2 + dy*0.4;
+  let cy2= y2 - dx*0.4;
+  let path=document.createElementNS("http://www.w3.org/2000/svg","path");
+  let d=`M ${x1} ${y1} C ${cx1} ${cy1} ${cx2} ${cy2} ${x2} ${y2}`;
+  path.setAttribute("d",d);
+  path.setAttribute("class","snake-path");
+  overlay.appendChild(path);
+  let head=document.createElementNS("http://www.w3.org/2000/svg","circle");
+  head.setAttribute("cx",x1);head.setAttribute("cy",y1);head.setAttribute("r",8);head.setAttribute("class","snake-head");
+  overlay.appendChild(head);
+  let tail=document.createElementNS("http://www.w3.org/2000/svg","circle");
+  tail.setAttribute("cx",x2);tail.setAttribute("cy",y2);tail.setAttribute("r",6);tail.setAttribute("class","snake-tail");
+  overlay.appendChild(tail);
+}
+
+function drawAllSnakesAndLadders(){
+  overlay.innerHTML="";
+  for(let a in ladders) drawLadder(parseInt(a),ladders[a]);
+  for(let a in snakes) drawSnake(parseInt(a),snakes[a]);
+}
+
+function placePlayers(){
+  document.querySelectorAll(".player").forEach(n=>n.remove());
+  let a=document.createElement("div"),b=document.createElement("div");
+  a.className="player p1";a.textContent="1";
+  b.className="player p2";b.textContent="2";
+  if(p1>0){
+    let pos=positions[p1];
+    a.style.left=pos.x+"px";a.style.top=pos.y+"px";
+  } else {a.style.left="40px";a.style.top=(size+30)+"px";}
+  if(p2>0){
+    let pos=positions[p2];
+    b.style.left=pos.x+"px";b.style.top=pos.y+"px";
+  } else {b.style.left=(size-40)+"px";b.style.top=(size+30)+"px";}
+  document.getElementById("wrap").appendChild(a);
+  document.getElementById("wrap").appendChild(b);
+  off1box.textContent = entered1 ? "In" : "Off-board";
+  off2box.textContent = entered2 ? "In" : "Off-board";
+}
+
+function updateTurnText(){
+  if(turn===1) turnText.textContent = name1+"'s Turn";
+  else if(turn===2) turnText.textContent = name2+"'s Turn";
+  else turnText.textContent = "";
+}
+
+function resetGame(){
+  p1=0;p2=0;turn=1;entered1=false;entered2=false;
+  status.textContent="";diceResult.textContent="";
+  buildBoard();drawAllSnakesAndLadders();placePlayers();updateTurnText();
+}
+
+startBtn.onclick=function(){
+  name1=document.getElementById("name1").value.trim()||"Player 1";
+  name2=document.getElementById("name2").value.trim()||"Player 2";
+  document.getElementById("startScreen").style.display="none";
+  document.getElementById("wrap").style.display="block";
+  document.getElementById("panel").style.display="block";
+  resetGame();
+};
+
+rollBtn.onclick=function(){
+  if(turn===0) return;
+  let roll=Math.floor(Math.random()*6)+1;
+  diceResult.textContent = "Dice: "+roll;
+  if(turn===1){
+    if(!entered1){if(roll===1){entered1=true;p1=1;}else{turn=2;updateTurnText();return;}}
+    else{let n=p1+roll;if(n<=100)p1=n;if(snakes[p1])p1=snakes[p1];if(ladders[p1])p1=ladders[p1];}
+    if(p1===100){status.textContent=name1+" Wins!";turn=0;replayBtn.style.display="inline-block";placePlayers();return;}
+    turn=2;updateTurnText();
+  } else {
+    if(!entered2){if(roll===1){entered2=true;p2=1;}else{turn=1;updateTurnText();return;}}
+    else{let n=p2+roll;if(n<=100)p2=n;if(snakes[p2])p2=snakes[p2];if(ladders[p2])p2=ladders[p2];}
+    if(p2===100){status.textContent=name2+" Wins!";turn=0;replayBtn.style.display="inline-block";placePlayers();return;}
+    turn=1;updateTurnText();
+  }
+  placePlayers();
+};
+
+replayBtn.onclick=function(){
+  document.getElementById("startScreen").style.display="flex";
+  document.getElementById("wrap").style.display="none";
+  document.getElementById("panel").style.display="none";
+  document.getElementById("name1").value="";
+  document.getElementById("name2").value="";
+};
+</script>
+
+</body>
+</html>
