@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Snake & Ladder</title>
+
+<style>
+:root { --size:600px; }
+
+body{
+  margin:0;
+  padding:40px;
+  font-family:Arial, sans-serif;
+  background:#1b5e20;
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  min-height:100vh;
+  color:#fff;
+}
+
+/* START SCREEN */
+#startScreen{
+  background:#0d3b1e;
+  padding:40px;
+  border-radius:20px;
+  display:flex;
+  flex-direction:column;
+  gap:20px;
+  align-items:center;
+}
+
+#startScreen input{
+  padding:12px;
+  width:250px;
+}
+
+#startScreen button{
+  padding:12px 30px;
+  cursor:pointer;
+}
+
+/* GAME AREA */
+#gameContainer{
+  display:none;
+  gap:40px;
+  align-items:center;
+}
+
+/* BOARD */
+#wrap{
+  width:var(--size);
+  height:var(--size);
+  position:relative;
+  background:url("board.png") no-repeat center/cover;
+}
+
+#grid{
+  position:absolute;
+  inset:0;
+  display:grid;
+  grid-template-columns:repeat(10,1fr);
+  grid-template-rows:repeat(10,1fr);
+}
+
+/* PLAYERS */
+.player{
+  width:26px;
+  height:26px;
+  border-radius:50%;
+  position:absolute;
+  transform:translate(-50%,-50%);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  color:#fff;
+  font-weight:bold;
+}
+.p1{background:red;}
+.p2{background:blue;}
+
+/* PANEL */
+#panel{
+  display:flex;
+  flex-direction:column;
+  gap:20px;
+  text-align:center;
+}
+
+#rollBtn{
+  padding:14px 30px;
+  cursor:pointer;
+}
+</style>
+</head>
+
+<body>
+
+<div id="startScreen">
+  <h2>Snake & Ladder</h2>
+  <input id="name1" placeholder="Player 1">
+  <input id="name2" placeholder="Player 2">
+  <button id="startBtn">Start</button>
+</div>
+
+<div id="gameContainer">
+  <div id="wrap"><div id="grid"></div></div>
+
+  <div id="panel">
+    <div id="turnText"></div>
+    <button id="rollBtn">🎲 Roll Dice</button>
+    <div id="dice"></div>
+  </div>
+</div>
+
+<!-- SOUND -->
+<audio id="diceSound" src="blink.mp3"></audio>
+<audio id="snakeSound" src="alas.mp3"></audio>
+<audio id="ladderSound" src="woow.mp3"></audio>
+<audio id="winSound" src="game_win.mp3"></audio>
+
+<script>
+const snakes = {99:78,89:68,84:64,62:41,52:29,38:18,33:7};
+const ladders = {3:22,8:30,20:41,28:55,36:65,51:71,73:93};
+
+const wrap = document.getElementById("wrap");
+const grid = document.getElementById("grid");
+const turnText = document.getElementById("turnText");
+const diceText = document.getElementById("dice");
+
+const diceSound = document.getElementById("diceSound");
+const snakeSound = document.getElementById("snakeSound");
+const ladderSound = document.getElementById("ladderSound");
+const winSound = document.getElementById("winSound");
+
+let size=600, cell=size/10, positions={};
+let p1=0,p2=0,entered1=false,entered2=false,turn=1;
+let name1="",name2="";
+
+/* GRID */
+function buildGrid(){
+  for(let r=0;r<10;r++){
+    for(let c=0;c<10;c++){
+      let index=r*10+(r%2===0?c+1:10-c);
+      let d=document.createElement("div");
+      grid.appendChild(d);
+      positions[index]={x:c*cell+cell/2,y:r*cell+cell/2};
+    }
+  }
+}
+
+/* PLAYERS */
+function placePlayers(){
+  document.querySelectorAll(".player").forEach(p=>p.remove());
+
+  [[p1,"p1",1],[p2,"p2",2]].forEach((pl,i)=>{
+    let d=document.createElement("div");
+    d.className="player "+pl[1];
+    d.textContent=pl[2];
+
+    let pos=pl[0]?positions[pl[0]]:{x:i?size-30:30,y:size+30};
+    d.style.left=pos.x+"px";
+    d.style.top=pos.y+"px";
+    wrap.appendChild(d);
+  });
+}
+
+function updateTurn(){
+  turnText.textContent=(turn===1?name1:name2)+"'s Turn";
+}
+
+/* START */
+startBtn.onclick=()=>{
+  name1=name1Input.value||"Player 1";
+  name2=name2Input.value||"Player 2";
+  startScreen.style.display="none";
+  gameContainer.style.display="flex";
+  buildGrid();
+  placePlayers();
+  updateTurn();
+};
+
+/* DICE */
+rollBtn.onclick=()=>{
+  let roll=Math.floor(Math.random()*6)+1;
+
+  diceSound.currentTime=0;
+  diceSound.play();
+
+  diceText.textContent="Dice: "+roll;
+
+  function move(pos,entered){
+    if(!entered){
+      if(roll===1) return {p:1,e:true};
+      return {p:pos,e:false};
+    }
+
+    if(pos+roll<=100) pos+=roll;
+
+    if(snakes[pos]){
+      pos=snakes[pos];
+      snakeSound.play();
+    }
+    else if(ladders[pos]){
+      pos=ladders[pos];
+      ladderSound.play();
+    }
+
+    return {p:pos,e:true};
+  }
+
+  if(turn===1){
+    let r=move(p1,entered1);
+    p1=r.p; entered1=r.e;
+    if(p1===100){
+      winSound.play();
+      alert(name1+" wins!");
+      location.reload();
+    }
+    turn=2;
+  } else {
+    let r=move(p2,entered2);
+    p2=r.p; entered2=r.e;
+    if(p2===100){
+      winSound.play();
+      alert(name2+" wins!");
+      location.reload();
+    }
+    turn=1;
+  }
+
+  placePlayers();
+  updateTurn();
+};
+</script>
+
+</body>
+</html>
